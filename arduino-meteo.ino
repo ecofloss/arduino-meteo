@@ -6,20 +6,10 @@
 #include <ICMPPing.h>
 #include <util.h>
 #include <MemoryFree.h>
-
-
-//Xarxa
-byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress ip(0,0,0,0);
-IPAddress subnet(0,0,0,0);
-IPAddress gateway(0,0,0,0);
-IPAddress dnsServer(0,0,0,0);
-IPAddress meteoServer(0,0,0,0);
-IPAddress pingAddr(0,0,0,0); // ip address to ping
-SOCKET pingSocket = 0;
-ICMPPing ping(pingSocket, (uint16_t)random(0, 255));
-EthernetServer server(80);
-EthernetClient client;
+#include "Xarxa.h"
+#include "Sensors.h"
+#include "Rellotge.h"
+#include "Utilitats.h"
 
 // Temps
 RTC_DS1307 rtc;
@@ -53,18 +43,6 @@ struct METEO
 METEO meteo;
 int error;
 
-//Variables Pluja
-const byte interruptPinPluja = 3;
-volatile unsigned long plujaMarcaTemps, plujaMarcaTempsUltim, plujaInterval;
-volatile float pluja = 0;
-
-//Variables Anemòmetre
-const byte interruptPinAnemometre = 2;
-volatile unsigned long ventMarcaTemps, ventMarcaTempsUltim, ventInterval;
-byte contadorAnemometre = 0;
-byte voltesAnemometre = 0;
-float velocitatVent = 0;
-
 byte lecturesVentHora=0;
 float sumaVelocitatVentHora=0;
 float maximaVelocitatVentHora=0;
@@ -73,10 +51,6 @@ byte lecturesVentMinut=0;
 float sumaVelocitatVentMinut=0;
 float maximaVelocitatVentMinut=0; 
 
-//Variables direcció vent
-const byte pinDireccioVentAnalogic = 0;
-
-int segonActual, segonAnterior, minutActual, minutAnterior, horaActual, horaAnterior;
 const byte ledPIN = 9;
 bool estat=HIGH;
 
@@ -147,30 +121,6 @@ void setup() {
   horaAnterior=now.hour();
 }
 
-float getPressio(){
-  sensors_event_t event;
-  bmp.getEvent(&event);
-  return event.pressure+32;
-}
-
-float getTemperatura(){
-  return htu.readTemperature();
-}
-
-float getTemperatura2(){
-    float temperature;
-    bmp.getTemperature(&temperature);
-    return temperature;
-}
-
-float getHumitat(){
-  return htu.readHumidity();
-}
-
-float getPluja(){
-  return pluja;
-}
-
 //Funció a executar quant es rep l'interrupció del sensor de pluja 
 void plujaIRQ()
 {
@@ -202,78 +152,6 @@ void anemometreIRQ()
     ventMarcaTempsUltim = ventMarcaTemps;
   }
   
-}
-
-//Funció per obtenir la direcció del vent
-float getDireccioVent()
-{
-  unsigned int lecturaDireccioVent;
-
-  lecturaDireccioVent = analogRead(pinDireccioVentAnalogic);
-
-  if (lecturaDireccioVent < 70) return (112.5);
-  if (lecturaDireccioVent < 88) return (67.5);
-  if (lecturaDireccioVent < 97) return (90);
-  if (lecturaDireccioVent < 130) return (157.5);
-  if (lecturaDireccioVent < 188) return (135);
-  if (lecturaDireccioVent < 248) return (202.5);
-  if (lecturaDireccioVent < 291) return (180);
-  if (lecturaDireccioVent < 410) return (22.5);
-  if (lecturaDireccioVent < 465) return (45);
-  if (lecturaDireccioVent < 603) return (247.5);
-  if (lecturaDireccioVent < 634) return (225);
-  if (lecturaDireccioVent < 706) return (337.5);
-  if (lecturaDireccioVent < 789) return (0);
-  if (lecturaDireccioVent < 831) return (292.5);
-  if (lecturaDireccioVent < 890) return (315);
-  if (lecturaDireccioVent < 948) return (270);
-  return (0);
-}
-
-void cada_Segon(){
-  velocitatVent=voltesAnemometre*0.667; // 2.4km/h=0.667m/s
-  sumaVelocitatVentMinut=sumaVelocitatVentMinut+velocitatVent;
-  lecturesVentMinut=lecturesVentMinut+1;
-
-  if (velocitatVent>maximaVelocitatVentMinut)
-  {
-    maximaVelocitatVentMinut=velocitatVent;
-  }
-  
-  voltesAnemometre=0;
-  velocitatVent=0;
-  
-  estat=!estat;
-  digitalWrite(ledPIN, estat);
-}
-
-void cada_Minut(){
-  float ventMinut=0;
-  ventMinut=getMitjanaVelocitatVentMinut();
-  
-  if (maximaVelocitatVentMinut>maximaVelocitatVentHora)
-  {
-    maximaVelocitatVentHora=maximaVelocitatVentMinut;
-  }
-
-  maximaVelocitatVentMinut=0;
-  sumaVelocitatVentMinut=0;
-  lecturesVentMinut=0;
-  
-  lecturesVentHora=lecturesVentHora+1;
-  sumaVelocitatVentHora=sumaVelocitatVentHora+ventMinut;
-  //creaCadena();
-  //Serial.println(debug());
-}
-
-void cada_Hora(){
-  desarEEPROM();
-  //Serial.println(cadena);
-  
-  lecturesVentHora=0;
-  sumaVelocitatVentHora=0;
-  maximaVelocitatVentHora=0;
-  pluja=0;
 }
 
 void desarEEPROM(){
@@ -339,180 +217,6 @@ int proximaDireccioEEPROM()
   int direccio=0;
   direccio=EEPROM.readInt(1020);
   return direccio;
-}
-
-String formata00(byte numero)
-{
-  String car="";
-  if (numero<10)
-  {
-    car="0";
-  }
-  car.concat(numero);
-  return car;
-}
-
-String formataPuntComa(float numero)
-{
-  String car="";
-  car.concat(numero);
-  car.replace('.',',');
-  return car;  
-}
-
-void servidor_WEB()
-{
-  // listen for incoming clients
-  EthernetClient client = server.available();
-  if (client) {
-    //Serial.println("Got a client");
-    // an http request ends with a blank line
-    boolean currentLineIsBlank = true;
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        // if you've gotten to the end of the line (received a newline
-        // character) and the line is blank, the http request has ended,
-        // so you can send a reply
-        if (c == '\n' && currentLineIsBlank) {
-          // send a standard http response header
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-Type: text/html");
-          client.println();
-          // print the current readings, in HTML format:
-          //client.print(cadena);
-          client.println("<br />");
-          client.print(debug());
-          client.println("<br />");
-          break;
-        }
-        if (c == '\n') {
-          // you're starting a new line
-          currentLineIsBlank = true;
-        } else if (c != '\r') {
-          // you've gotten a character on the current line
-          currentLineIsBlank = false;
-        }
-      }
-    }
-    // give the web browser time to receive the data
-    delay(1);
-    // close the connection:
-    client.stop();
-  }
-}
-
-String debug()
-{
-  String cad="";
-  cad.concat("numEntradesBolcat=");
-  cad.concat(numEntradesBolcat);
-  cad.concat("freeMemory=");
-  cad.concat(freeMemory());
-  cad.concat(";");
-  cad.concat(segonActual);
-  cad.concat(";");
-  cad.concat(minutActual);
-  cad.concat(";");
-  cad.concat(horaActual);
-  cad.concat(";");
-  cad.concat(segonAnterior);
-  cad.concat(";");
-  cad.concat(minutAnterior);
-  cad.concat(";");
-  cad.concat(horaAnterior);
-  cad.concat(";");
-  cad.concat("DireccioEEPROM=");
-  cad.concat(proximaDireccioEEPROM());
-  cad.concat(";");
-  cad.concat("NúmeroErrors=");
-  cad.concat(error);
-  cad.concat(";");
-
-  cad.concat(now.year());
-  cad.concat(formata00(now.month()));
-  cad.concat(formata00(now.day()));
-  cad.concat(formata00(now.hour()));
-  cad.concat(formata00(now.minute()));
-  cad.concat(formata00(now.second()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getTemperatura()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getHumitat()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getPressio()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getTemperatura2()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getPluja()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getDireccioVent()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getMitjanaVelocitatVentMinut()));
-  cad.concat(";");
-  cad.concat(formataPuntComa(getMaximaVelocitatVentMinut()));
-  return cad;
-}
-
-void bolcat_de_EEPROM_a_inet()
-{
-  METEO meteoEEPROM;
-  String cad;
-  numEntradesBolcat=numEntradesBolcat+1;
-  ICMPEchoReply echoReply = ping(pingAddr, 1);
-  if (echoReply.status == SUCCESS)
-  {
-    for (int direccio=0;direccio<1001;direccio=direccio+sizeof(meteo))
-    {
-      EEPROM.readBlock(direccio, meteoEEPROM);
-      if (meteoEEPROM.commit==0) // No s'ha bolcat el registre a internet
-      {
-        cad="";
-        cad.concat("GET /meteo/m3t304rd11n0.php?cadena=");
-        cad.concat(meteoEEPROM.any);
-        cad.concat(formata00(meteoEEPROM.mes));
-        cad.concat(formata00(meteoEEPROM.dia));
-        cad.concat(formata00(meteoEEPROM.hora));
-        cad.concat(formata00(meteoEEPROM.minut));
-        cad.concat("00");
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.temperatura/100);
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.humitat/100);
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.pressio/10);
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.pluja/100);
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.direcciovent/100);
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.mitjanavelocitatvent/100);
-        cad.concat(";");
-        cad.concat((float)meteoEEPROM.maximavelocitatvent/100);
-        cad.concat(" HTTP/1.1");
-
-        if (client.connect(meteoServer, 80))
-        {
-          client.println(cad);
-          client.println("Host: www.botocasademont.name");
-          client.println("Connection: close");
-          client.println();
-          client.flush();
-          client.stop();
-
-          //Marquem que el registre ja està guardat a internet
-          meteoEEPROM.commit=1;
-          EEPROM.updateBlock(direccio, meteoEEPROM);
-        
-        }
-        //else
-        //{
-          // if you didn't get a connection to the server:
-        //  Serial.println("connection failed");
-        //}
-      }
-    }
-  }
 }
 
 void loop() {
