@@ -10,6 +10,7 @@
 #include "Sensors.h"
 #include "Rellotge.h"
 #include "Utilitats.h"
+#include "Temporitzador.h"
 
 // Temps
 RTC_DS1307 rtc;
@@ -57,6 +58,7 @@ bool estat=HIGH;
 bool pasFet=true;
 
 void setup() {
+  cli(); //Desactivo interrupcions
   Serial.begin(9600);
   pinMode(ledPIN, OUTPUT); //Llum led d'estat
 
@@ -119,39 +121,9 @@ void setup() {
   segonAnterior=now.second();
   minutAnterior=now.minute();
   horaAnterior=now.hour();
-}
-
-//Funció a executar quant es rep l'interrupció del sensor de pluja 
-void plujaIRQ()
-{
-    plujaMarcaTemps = millis();  
-    plujaInterval = plujaMarcaTemps - plujaMarcaTempsUltim;
-
-    if (plujaInterval > 10)
-    {
-        pluja+=0.2794;
-        plujaMarcaTempsUltim = plujaMarcaTemps;
-    }
-
-}
-
-//Funció a executar quant es rep l'interrupció de l'anemòmetre
-void anemometreIRQ()
-{
-  ventMarcaTemps = millis();  
-  ventInterval = ventMarcaTemps - ventMarcaTempsUltim;
-
-  if (ventInterval > 20)
-  {
-    contadorAnemometre=contadorAnemometre+1;
-    if (contadorAnemometre=2)
-    {
-      contadorAnemometre=0;
-      voltesAnemometre=voltesAnemometre+1;
-    }  
-    ventMarcaTempsUltim = ventMarcaTemps;
-  }
   
+  gosdeguaitaSetup();//Activo el gos de guaita
+  sei();//Activo interrupcions
 }
 
 void desarEEPROM(){
@@ -220,6 +192,9 @@ int proximaDireccioEEPROM()
 }
 
 void loop() {
+  //Reinicio el gos de guaita
+  wdt_reset();
+
   // put your main code here, to run repeatedly:
   now = rtc.now();
   while (now.day() == 165) //comprovo error típic del RTC
